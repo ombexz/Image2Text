@@ -1,0 +1,947 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LipiScan AI - Enterprise Multilingual OCR & Layout Engine (5GB)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#1e1b4b'
+                        }
+                    },
+                    fontFamily: {
+                        'times': ['"Times New Roman"', 'Times', 'serif'],
+                        'preeti': ['Preeti', 'Kantipur', 'sans-serif'],
+                        'devanagari': ['"Noto Sans Devanagari"', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts for Devanagari & Nepal Bhaasa (Newa) representation -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for crisp icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Embedded webfont fallback for Preeti legacy encoding */
+        @font-face {
+            font-family: 'Preeti';
+            src: local('Preeti'), local('Kantipur'), url('https://fonts.cdnfonts.com/s/17215/Preeti.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+
+        /* Scan line animation */
+        @keyframes scan {
+            0% { top: 0%; opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { top: 98%; opacity: 0.8; }
+        }
+
+        .scanning-line {
+            animation: scan 2.2s ease-in-out infinite alternate;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        .output-times {
+            font-family: 'Times New Roman', Times, serif !important;
+        }
+        .output-preeti {
+            font-family: 'Preeti', 'Kantipur', sans-serif !important;
+            letter-spacing: 0.5px;
+        }
+        .output-unicode {
+            font-family: 'Noto Sans Devanagari', 'Inter', sans-serif !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Top Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-file-invoice text-white text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-xl tracking-tight text-white">LipiScan<span class="text-indigo-400">.ai</span></span>
+                        <span class="px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded-full">v3.4 Multilingual</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">High-Precision OCR & Layout Reconstruction</p>
+                </div>
+            </div>
+
+            <!-- Upload Quota Monitor (5GB Limit) -->
+            <div class="hidden md:flex items-center space-x-6">
+                <div class="flex flex-col items-end">
+                    <div class="flex items-center space-x-2 text-xs">
+                        <span class="text-slate-400">Session Buffer Pool:</span>
+                        <span class="text-emerald-400 font-medium" id="bufferUsageText">0.00 MB / 5,120.00 MB (5 GB)</span>
+                    </div>
+                    <div class="w-56 h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1">
+                        <div id="bufferBar" class="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 w-[1%] transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div class="h-8 w-px bg-slate-800"></div>
+
+                <button onclick="openLanguageModal()" class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg text-indigo-300 bg-indigo-950/60 border border-indigo-700/50 hover:bg-indigo-900/50 hover:border-indigo-500 transition-all shadow-sm">
+                    <i class="fa-solid fa-globe mr-1.5 text-indigo-400"></i> Manage Languages
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Control Bar: OCR Engines, Multilingual Selector, Font Toggles -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-slate-900/90 p-4 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-sm">
+            <!-- Language Selector -->
+            <div class="lg:col-span-4 flex flex-col justify-center">
+                <label class="block text-xs font-medium text-slate-400 mb-1.5 flex items-center justify-between">
+                    <span><i class="fa-solid fa-language text-indigo-400 mr-1.5"></i>Detected / Target Language</span>
+                    <button onclick="openLanguageModal()" class="text-[11px] text-indigo-400 hover:text-indigo-300 underline">+ Add New Language</button>
+                </label>
+                <div class="relative">
+                    <select id="languageSelect" onchange="handleLanguageChange()" class="w-full bg-slate-800/90 border border-slate-700 text-slate-200 text-sm rounded-xl px-3.5 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none transition-all cursor-pointer">
+                        <option value="multi" selected>🌐 Auto-Detect Multilingual (Eng + हिन् + नेपा)</option>
+                        <option value="en">English (US / UK / International)</option>
+                        <option value="ne">Nepali (नेपाली - देवनागरी)</option>
+                        <option value="hi">Hindi (हिन्दी - देवनागरी)</option>
+                        <option value="new">Nepal Bhaasa (नेपाल भाषा / Newar / रञ्जना लिपि)</option>
+                        <option value="sa">Sanskrit (संस्कृतम्)</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-3.5 top-3.5 text-xs text-slate-400 pointer-events-none"></i>
+                </div>
+            </div>
+
+            <!-- Output Font & Encoding Customization -->
+            <div class="lg:col-span-5 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-4">
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">
+                    <i class="fa-solid fa-font text-indigo-400 mr-1.5"></i>Font Family & Script Output Mapping
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- English Font (Always Times New Roman) -->
+                    <div class="flex items-center space-x-2 bg-slate-800/60 px-3 py-2 rounded-xl border border-slate-700/60">
+                        <div class="w-7 h-7 rounded-lg bg-indigo-900/50 flex items-center justify-center text-xs font-bold text-indigo-300">En</div>
+                        <div class="text-xs">
+                            <span class="block text-slate-200 font-times text-sm">Times New Roman</span>
+                            <span class="block text-[10px] text-slate-400">Strict English Typeface</span>
+                        </div>
+                    </div>
+
+                    <!-- Nepali / Devanagari Encoding Mode -->
+                    <div class="relative">
+                        <select id="nepaliFontMode" onchange="handleNepaliFontChange()" class="w-full h-full bg-slate-800/60 border border-slate-700/60 text-slate-200 text-xs rounded-xl px-2.5 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer">
+                            <option value="unicode" selected>Nepali: Unicode (UTF-8)</option>
+                            <option value="preeti">Nepali: Preeti Font (प्रिती)</option>
+                        </select>
+                        <i class="fa-solid fa-sliders absolute right-2.5 top-3.5 text-xs text-slate-400 pointer-events-none"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5GB Limit Stats Badge -->
+            <div class="lg:col-span-3 flex items-center justify-end border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-4">
+                <div class="w-full bg-gradient-to-br from-indigo-950/40 to-slate-800/60 p-2.5 rounded-xl border border-indigo-900/40 flex items-center justify-between">
+                    <div>
+                        <div class="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-shield-halved mr-1.5 text-emerald-400"></i> Max 5.0 GB Quota
+                        </div>
+                        <div class="text-xs text-slate-400 mt-0.5">Ultra-HD TIF, PNG, RAW support</div>
+                    </div>
+                    <span class="text-xs px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg font-mono">Active</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extraction Format Switcher Pills -->
+        <div class="bg-slate-900/70 p-2 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-1 sm:space-x-2">
+                <span class="text-xs font-semibold text-slate-400 px-3 uppercase tracking-wider">Format Mode:</span>
+                
+                <!-- Format Option 1 -->
+                <button id="fmtBtn-plain" onclick="setExtractionFormat('plain')" class="format-tab-btn active px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center space-x-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
+                    <i class="fa-solid fa-align-left text-xs"></i>
+                    <span>1. Text Only (No Format)</span>
+                </button>
+
+                <!-- Format Option 2 -->
+                <button id="fmtBtn-formatted" onclick="setExtractionFormat('formatted')" class="format-tab-btn px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white">
+                    <i class="fa-solid fa-paragraph text-xs"></i>
+                    <span>2. Preserved Formatting</span>
+                </button>
+
+                <!-- Format Option 3 -->
+                <button id="fmtBtn-rich" onclick="setExtractionFormat('rich')" class="format-tab-btn px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white">
+                    <i class="fa-solid fa-table-cells text-xs text-indigo-400"></i>
+                    <span>3. Rich Structural (Tables + Headings)</span>
+                </button>
+            </div>
+
+            <!-- Export / Quick Action Tools -->
+            <div class="flex items-center space-x-2 ml-auto pr-1">
+                <button onclick="copyToClipboard()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center space-x-1.5" title="Copy output">
+                    <i class="fa-regular fa-copy"></i>
+                    <span id="copyBtnText">Copy</span>
+                </button>
+                <div class="relative group">
+                    <button class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Export</span>
+                        <i class="fa-solid fa-angle-down text-[10px] ml-1"></i>
+                    </button>
+                    <div class="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-xl shadow-xl py-1 hidden group-hover:block z-50">
+                        <a href="javascript:void(0)" onclick="downloadExport('txt')" class="block px-3 py-2 text-xs text-slate-200 hover:bg-indigo-600 hover:text-white flex items-center space-x-2"><i class="fa-regular fa-file-lines w-4"></i><span>Plain Text (.txt)</span></a>
+                        <a href="javascript:void(0)" onclick="downloadExport('doc')" class="block px-3 py-2 text-xs text-slate-200 hover:bg-indigo-600 hover:text-white flex items-center space-x-2"><i class="fa-regular fa-file-word w-4"></i><span>MS Word (.docx)</span></a>
+                        <a href="javascript:void(0)" onclick="downloadExport('json')" class="block px-3 py-2 text-xs text-slate-200 hover:bg-indigo-600 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-code w-4"></i><span>Structured JSON (.json)</span></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Two-Pane Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[580px]">
+            
+            <!-- Left Pane: Upload Zone & Image Scan Visualizer -->
+            <div class="lg:col-span-5 flex flex-col space-y-4">
+                <!-- Dropzone Area -->
+                <div id="dropZone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" class="relative border-2 border-dashed border-slate-700 hover:border-indigo-500/80 bg-slate-900/40 hover:bg-slate-900/70 rounded-2xl p-6 transition-all duration-200 flex flex-col items-center justify-center text-center group cursor-pointer min-h-[220px]">
+                    <input type="file" id="fileInput" accept="image/*,application/pdf" multiple onchange="handleFileSelect(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-600/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-110 group-hover:bg-indigo-600/20 transition-transform duration-200 mb-3">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                    </div>
+                    
+                    <h3 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-300">Drag & Drop Scan Documents or Images</h3>
+                    <p class="text-xs text-slate-400 mt-1 max-w-sm">Supports TIFF, JPG, PNG, WebP, Raw scans. Individual or batch uploads up to <strong class="text-indigo-400">5 GB total</strong>.</p>
+                    
+                    <div class="flex items-center gap-2 mt-4 text-[11px] text-slate-500">
+                        <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">English</span>
+                        <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">नेपाली</span>
+                        <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">हिन्दी</span>
+                        <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">नेपाल भाषा</span>
+                    </div>
+                </div>
+
+                <!-- Document Preview and OCR Bounding Boxes -->
+                <div class="flex-1 bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+                    <div class="px-4 py-2.5 border-b border-slate-800/80 bg-slate-900/90 flex items-center justify-between text-xs">
+                        <span class="font-medium text-slate-300 flex items-center">
+                            <i class="fa-regular fa-image mr-2 text-indigo-400"></i>Document Inspection Canvas
+                        </span>
+                        <span id="fileBadge" class="text-[11px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40">Demo Image Loaded</span>
+                    </div>
+
+                    <div class="relative flex-1 bg-black/40 flex items-center justify-center p-4 min-h-[300px] overflow-hidden" id="canvasContainer">
+                        <!-- Preview Image -->
+                        <img id="imagePreview" src="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1000&q=80" alt="Scanned Document Preview" class="max-h-[360px] w-auto object-contain rounded-lg shadow-2xl border border-slate-800 transition-all duration-300">
+                        
+                        <!-- Animated Scanning Line -->
+                        <div id="scannerLine" class="hidden absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent scanning-line shadow-[0_0_12px_#38bdf8]"></div>
+
+                        <!-- Detected Bounding Boxes Simulation Overlay -->
+                        <div id="ocrBoxes" class="absolute inset-4 pointer-events-none">
+                            <div class="absolute top-[18%] left-[20%] w-[58%] h-[12%] border border-cyan-400/50 bg-cyan-500/10 rounded-sm"></div>
+                            <div class="absolute top-[36%] left-[16%] w-[68%] h-[24%] border border-indigo-400/50 bg-indigo-500/10 rounded-sm"></div>
+                            <div class="absolute top-[65%] left-[16%] w-[68%] h-[22%] border border-purple-400/50 bg-purple-500/10 rounded-sm"></div>
+                        </div>
+
+                        <!-- Scan Status HUD -->
+                        <div id="processingHud" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-3">
+                            <div class="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                            <div class="text-sm font-semibold text-slate-200" id="hudStatus">Analyzing Optical Glyphs...</div>
+                            <div class="text-xs text-slate-400 font-mono" id="hudSubStatus">Chunking multi-script Devanagari & Latin tokens</div>
+                        </div>
+                    </div>
+
+                    <!-- Scan Trigger & Quick Actions -->
+                    <div class="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
+                        <button onclick="triggerSampleScan()" class="text-xs text-indigo-400 hover:text-indigo-300 transition flex items-center space-x-1">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>Reload Sample Document</span>
+                        </button>
+                        <button onclick="runOCRSimulation()" class="px-4 py-1.5 text-xs font-semibold bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg shadow-md transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-bolt text-amber-300"></i>
+                            <span>Re-run OCR Extraction</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Pane: Extracted Multilingual Result View -->
+            <div class="lg:col-span-7 flex flex-col bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+                <!-- Viewer Header Details -->
+                <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-emerald-500/20 animate-pulse"></div>
+                        <div>
+                            <span class="text-sm font-semibold text-slate-200">Extracted Multilingual Content</span>
+                            <span id="currentEncodingBadge" class="ml-2 text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">Times New Roman / Unicode</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2 text-xs">
+                        <span class="text-slate-400"><i class="fa-solid fa-check-double text-emerald-400 mr-1"></i>Confidence: <span class="text-slate-200 font-mono font-medium">99.4%</span></span>
+                        <span class="text-slate-600">|</span>
+                        <span class="text-slate-400">Words: <span id="wordCountBadge" class="text-slate-200 font-mono font-medium">186</span></span>
+                    </div>
+                </div>
+
+                <!-- Live Editor / Output Screen -->
+                <div class="flex-1 p-6 overflow-y-auto bg-slate-950/70" style="max-height: 520px;" id="outputViewport">
+                    
+                    <!-- Content will be injected dynamically according to selected format mode (1, 2, or 3) and selected fonts -->
+                    <div id="outputContentContainer" class="text-slate-200 transition-all leading-relaxed">
+                        <!-- Loaded dynamically -->
+                    </div>
+
+                </div>
+
+                <!-- Bottom Status Bar -->
+                <div class="px-5 py-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <div class="flex items-center space-x-3">
+                        <span><i class="fa-regular fa-keyboard mr-1 text-slate-500"></i>Editable Content Area</span>
+                        <span>•</span>
+                        <span id="activeLangDisplay" class="text-indigo-400 font-medium">Multilingual: English + Nepali + Nepal Bhaasa</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="clearText()" class="hover:text-red-400 transition" title="Clear Content">
+                            <i class="fa-regular fa-trash-can mr-1"></i>Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Informational Banner for Font Specifications & 5GB Processing pipeline -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <div class="bg-slate-900/50 border border-slate-800/80 p-4 rounded-xl flex items-start space-x-3">
+                <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 text-sm mt-0.5">
+                    <i class="fa-solid fa-hard-drive"></i>
+                </div>
+                <div>
+                    <h4 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">5 GB Multi-Chunk Queue</h4>
+                    <p class="text-xs text-slate-400 mt-1">Handles high-resolution archival maps, bulk historical books, and multi-gigabyte uncompressed TIFF documents.</p>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/50 border border-slate-800/80 p-4 rounded-xl flex items-start space-x-3">
+                <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 text-sm mt-0.5">
+                    <i class="fa-solid fa-i-cursor"></i>
+                </div>
+                <div>
+                    <h4 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">English: Times New Roman</h4>
+                    <p class="text-xs text-slate-400 mt-1">International serif standard applied to all Latin-extracted tokens, preserving academic and legal document integrity.</p>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/50 border border-slate-800/80 p-4 rounded-xl flex items-start space-x-3">
+                <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm mt-0.5">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                </div>
+                <div>
+                    <h4 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Nepali: Preeti & Unicode Switch</h4>
+                    <p class="text-xs text-slate-400 mt-1">Instant bidirectional translation between standard Devanagari Unicode (युनिकोड) and traditional legacy Preeti font glyphs.</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal: Add New Language Engine / Custom Language Pack -->
+    <div id="langModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden transform transition-all">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-language text-indigo-400 text-lg"></i>
+                    <h3 class="text-base font-semibold text-white">Add New OCR Language Pack</h3>
+                </div>
+                <button onclick="closeLanguageModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-slate-400">
+                    LipiScan allows custom training data or ISO language weights (Tesseract traineddata / Deep Learning models) for regional and indigenous scripts.
+                </p>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Language Name</label>
+                    <input type="text" id="newLangName" placeholder="e.g., Maithili, Bhojpuri, Tibetan, French" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Language Code (ISO 639-2)</label>
+                        <input type="text" id="newLangCode" placeholder="e.g., mai, bho, bod" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Script Architecture</label>
+                        <select id="newLangScript" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none">
+                            <option value="Devanagari">Devanagari / Indic</option>
+                            <option value="Latin">Latin / Serif</option>
+                            <option value="Sino-Tibetan">Sino-Tibetan</option>
+                            <option value="Custom">Custom Glyphs / Complex</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Language Model Pack (.traineddata or ONNX URL)</label>
+                    <div class="border border-dashed border-slate-700 rounded-xl p-3 text-center bg-slate-800/40">
+                        <i class="fa-solid fa-file-arrow-up text-indigo-400 mb-1 text-sm"></i>
+                        <div class="text-[11px] text-slate-400">Auto-download from Open Source Tesseract repo or specify URL</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 bg-slate-900/90 border-t border-slate-800 flex items-center justify-end space-x-3">
+                <button onclick="closeLanguageModal()" class="px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-xl transition">Cancel</button>
+                <button onclick="addNewLanguage()" class="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg transition">Install Language Model</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center space-x-3 bg-slate-800 border border-indigo-500/40 text-slate-100 px-4 py-3 rounded-xl shadow-2xl">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMsg" class="text-xs font-medium">Notification message</span>
+    </div>
+
+    <!-- Application Logic & Preeti Converter Engine -->
+    <script>
+        // State Management
+        let currentFormat = 'plain'; // 'plain', 'formatted', 'rich'
+        let currentNepaliEncoding = 'unicode'; // 'unicode' or 'preeti'
+        let currentLanguage = 'multi';
+        let totalBufferUsedBytes = 48500000; // Start with ~48.5 MB simulated buffer
+        const MAX_BUFFER_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
+
+        // Mapping dictionary for Unicode Devanagari to Preeti legacy characters (Sample core mappings for demonstration)
+        const unicodeToPreetiMap = {
+            'नेपाल': 's]kfn',
+            'नेपाली': 's]kfnL',
+            'काठमाडौँ': 'sf7df8f}+',
+            'काठमाडौं': 'sf7df8f}+',
+            'हिन्दी': 'lxGbL',
+            'भारत': 'ef/t',
+            'नेपाल भाषा': 's]kfn efiff',
+            'प्रतिवेदन': 'k|lta]bg',
+            'विवरण': 'ljj/0f',
+            'अनुसूची': 'cg';"rL',
+            'संख्या': ';+Vof',
+            'रकम': '/sd',
+            'मिति': 'ldlt',
+            'दस्तखत': 'b:tvt',
+            'जम्मा': 'hDdf',
+            'नमस्ते': 'gd:t]',
+            'नमस्कार': 'gd:sf/',
+            'कार्यालय': 'sfo{no',
+            'तथा': 'tyf',
+            'सूचना': ';"rgf'
+        };
+
+        // Master Multilingual Dataset Mock representing a realistic government/historical document
+        const documentData = {
+            metadata: {
+                titleEnglish: "TRI-LINGUAL NATIONAL ARCHIVAL REGISTER - 2024",
+                titleNepaliUnicode: "नेपाल सरकार - राष्ट्रिय अभिलेखालय तथा सूचना प्रविधि विभाग",
+                titleNepalBhaasaUnicode: "नेपाल संवत् ११४४ : येँ महानगरपालिका - नेपाल भाषा संरक्षण प्रतिवेदन",
+                titleHindiUnicode: "बहुभाषी अनुवाद एवं ऐतिहासिक अभिलेख सारणी"
+            },
+            bodyParagraphs: [
+                {
+                    en: "Official Gazette: Pursuant to Section 4 of the Digital Archival Act, the text contained herein has been extracted with complete structural fidelity under Times New Roman font classification.",
+                    neUnicode: "अनुसूची २ बमोजिम प्रमाणित प्रतिलिपि: यस कार्यालयको अभिलेख अनुसार सम्बन्धित विवरण यथावत प्रमाणित गरिएको छ। प्रिती फन्ट वा युनिकोड दुवै ढाँचामा रूपान्तरण उपलब्ध छ।",
+                    hiUnicode: "सूचना एवं प्रसारण प्रभाग: इस प्रलेख का अनुवाद देवनागरी लिपि के मानकीकृत नियमों के तहत किया गया है।",
+                    newUnicode: "झिगु नेपाल भाषाया ऐतिहासिक दसू व अभिलेख थ्व थासय् संरक्षित यानातःगु दु। थ्व ऐतिहासिक दस्तावेज खः।"
+                }
+            ],
+            table: {
+                headers: ["क्र.सं (S.N.)", "विवरण (Description)", "भाषा (Language)", "रकम / स्थिति (Amount/Status)"],
+                rows: [
+                    ["०१", "National Heritage Digitization (Phase 1)", "English / नेपाली", "रू. २५,००,०००.०० (Approved)"],
+                    ["०२", "रञ्जना लिपि तथा नेपाल भाषा संरक्षण कार्य", "नेपाल भाषा (Newar)", "प्रक्रियामा (In Progress)"],
+                    ["०३", "Classical Sanskrit & Hindi Text Manuscripts", "हिन्दी / संस्कृत", "पूर्ण भएको (Completed)"]
+                ]
+            }
+        };
+
+        // Convert Nepali Unicode to Preeti approximation for display
+        function convertToPreeti(text) {
+            let result = text;
+            for (const [uni, preeti] of Object.entries(unicodeToPreetiMap)) {
+                result = result.split(uni).join(preeti);
+            }
+            return result;
+        }
+
+        // Initialize display on window load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateBufferUI();
+            renderExtractedOutput();
+        });
+
+        // Update the 5 GB buffer pool status
+        function updateBufferUI() {
+            const usedMB = (totalBufferUsedBytes / (1024 * 1024)).toFixed(2);
+            const totalMB = (MAX_BUFFER_BYTES / (1024 * 1024)).toFixed(2);
+            const pct = Math.min(100, (totalBufferUsedBytes / MAX_BUFFER_BYTES) * 100);
+            
+            document.getElementById('bufferUsageText').textContent = `${usedMB} MB / ${totalMB} MB (5 GB)`;
+            document.getElementById('bufferBar').style.width = `${Math.max(1, pct)}%`;
+        }
+
+        // Set Format Mode
+        function setExtractionFormat(format) {
+            currentFormat = format;
+            
+            // Update Tab styles
+            ['plain', 'formatted', 'rich'].forEach(f => {
+                const btn = document.getElementById(`fmtBtn-${f}`);
+                if (f === format) {
+                    btn.className = "format-tab-btn active px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center space-x-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30";
+                } else {
+                    btn.className = "format-tab-btn px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white";
+                }
+            });
+
+            renderExtractedOutput();
+            showToast(`Switched to: ${format.toUpperCase()} extraction view`, 'info');
+        }
+
+        // Nepali Font change
+        function handleNepaliFontChange() {
+            currentNepaliEncoding = document.getElementById('nepaliFontMode').value;
+            const badge = document.getElementById('currentEncodingBadge');
+            badge.textContent = `Times New Roman / ${currentNepaliEncoding === 'preeti' ? 'Preeti Font (प्रिती)' : 'Unicode'}`;
+            renderExtractedOutput();
+            showToast(`Nepali typography set to: ${currentNepaliEncoding.toUpperCase()}`, 'check');
+        }
+
+        // Language dropdown change
+        function handleLanguageChange() {
+            currentLanguage = document.getElementById('languageSelect').value;
+            const display = document.getElementById('activeLangDisplay');
+            
+            const langNames = {
+                'multi': 'Multilingual: English + Nepali + Nepal Bhaasa + Hindi',
+                'en': 'English Only (Times New Roman)',
+                'ne': 'Nepali (नेपाली - देवनागरी)',
+                'hi': 'Hindi (हिन्दी - देवनागरी)',
+                'new': 'Nepal Bhaasa (नेपाल भाषा / Newar)',
+                'sa': 'Sanskrit (संस्कृतम्)'
+            };
+            display.textContent = langNames[currentLanguage] || currentLanguage;
+            runOCRSimulation();
+        }
+
+        // Render extracted text dynamically across the 3 formats and font requirements
+        function renderExtractedOutput() {
+            const container = document.getElementById('outputContentContainer');
+            const isPreeti = (currentNepaliEncoding === 'preeti');
+
+            // Resolve Nepali text according to font choice
+            const getNeText = (text) => isPreeti ? convertToPreeti(text) : text;
+            const neFontClass = isPreeti ? 'output-preeti text-indigo-300' : 'output-unicode text-slate-100';
+
+            if (currentFormat === 'plain') {
+                // FORMAT 1: Text only with NO FORMAT (raw continuous string)
+                let rawString = "";
+
+                if (currentLanguage === 'multi' || currentLanguage === 'en') {
+                    rawString += `${documentData.metadata.titleEnglish} \n\n${documentData.bodyParagraphs[0].en}\n\n`;
+                }
+                if (currentLanguage === 'multi' || currentLanguage === 'ne') {
+                    rawString += `${getNeText(documentData.metadata.titleNepaliUnicode)} \n\n${getNeText(documentData.bodyParagraphs[0].neUnicode)}\n\n`;
+                }
+                if (currentLanguage === 'multi' || currentLanguage === 'hi') {
+                    rawString += `${documentData.metadata.titleHindiUnicode} \n\n${documentData.bodyParagraphs[0].hiUnicode}\n\n`;
+                }
+                if (currentLanguage === 'multi' || currentLanguage === 'new') {
+                    rawString += `${getNeText(documentData.metadata.titleNepalBhaasaUnicode)} \n\n${getNeText(documentData.bodyParagraphs[0].newUnicode)}\n\n`;
+                }
+
+                // Append unformatted table records
+                documentData.table.rows.forEach(row => {
+                    rawString += row.map(c => getNeText(c)).join(" | ") + "\n";
+                });
+
+                container.innerHTML = `
+                    <div class="font-mono text-xs whitespace-pre-wrap leading-relaxed select-text p-3 bg-black/30 rounded-xl border border-slate-800 text-slate-300">
+                        ${escapeHtml(rawString.trim())}
+                    </div>
+                `;
+            } 
+            else if (currentFormat === 'formatted') {
+                // FORMAT 2: Text with the formatting of the original (Paragraph indentation, line breaks, standard alignments)
+                let formattedHtml = `
+                    <div class="space-y-6 select-text max-w-3xl mx-auto py-2">
+                        <!-- Header Block -->
+                        <div class="border-b border-slate-800 pb-4 text-center space-y-1.5">
+                            <p class="output-times text-lg font-bold text-white tracking-wide uppercase">${documentData.metadata.titleEnglish}</p>
+                            <p class="${neFontClass} text-base font-semibold text-slate-200">${getNeText(documentData.metadata.titleNepaliUnicode)}</p>
+                            <p class="${neFontClass} text-sm text-slate-400">${getNeText(documentData.metadata.titleNepalBhaasaUnicode)}</p>
+                        </div>
+
+                        <!-- Content Sections -->
+                        <div class="space-y-4 text-justify">
+                            <p class="output-times text-base text-slate-200 indent-8 leading-relaxed">
+                                <span class="font-bold text-indigo-400">English Transcript:</span> ${documentData.bodyParagraphs[0].en}
+                            </p>
+                            <p class="${neFontClass} text-sm indent-8 leading-relaxed">
+                                <span class="font-bold text-indigo-400">नेपाली विवरण:</span> ${getNeText(documentData.bodyParagraphs[0].neUnicode)}
+                            </p>
+                            <p class="output-unicode text-sm indent-8 leading-relaxed text-slate-300">
+                                <span class="font-bold text-indigo-400">हिन्दी अनुवाद:</span> ${documentData.bodyParagraphs[0].hiUnicode}
+                            </p>
+                            <p class="${neFontClass} text-sm indent-8 leading-relaxed text-slate-400">
+                                <span class="font-bold text-indigo-400">नेपाल भाषा (ख्वबि):</span> ${getNeText(documentData.bodyParagraphs[0].newUnicode)}
+                            </p>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = formattedHtml;
+            } 
+            else if (currentFormat === 'rich') {
+                // FORMAT 3: Text with formatting, tables, headings, and other formats used in original
+                let richHtml = `
+                    <div class="space-y-6 select-text">
+                        <!-- Government Document Header Block -->
+                        <div class="bg-gradient-to-r from-slate-900 to-indigo-950/40 p-5 rounded-xl border border-indigo-500/20 text-center shadow-lg">
+                            <div class="inline-block px-3 py-1 bg-indigo-500/10 border border-indigo-500/30 rounded-full text-[11px] text-indigo-300 font-mono mb-2">
+                                OFFICIAL REGISTER / अनुसूची खण्ड
+                            </div>
+                            <h1 class="output-times text-xl md:text-2xl font-bold text-white tracking-wide">${documentData.metadata.titleEnglish}</h1>
+                            <h2 class="${neFontClass} text-base md:text-lg font-medium text-indigo-200 mt-1">${getNeText(documentData.metadata.titleNepaliUnicode)}</h2>
+                            <p class="${neFontClass} text-xs text-slate-400 mt-0.5">${getNeText(documentData.metadata.titleNepalBhaasaUnicode)}</p>
+                        </div>
+
+                        <!-- Structured Headings & Callouts -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+                                <h3 class="output-times text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center">
+                                    <i class="fa-solid fa-stamp mr-2 text-xs"></i> English Certification
+                                </h3>
+                                <p class="output-times text-sm text-slate-200 mt-2 leading-relaxed">
+                                    ${documentData.bodyParagraphs[0].en}
+                                </p>
+                            </div>
+
+                            <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+                                <h3 class="${neFontClass} text-sm font-bold tracking-wide text-emerald-400 flex items-center">
+                                    <i class="fa-solid fa-feather mr-2 text-xs"></i> ${getNeText("नेपाली प्रमाणिकरण अभिलेख")}
+                                </h3>
+                                <p class="${neFontClass} text-sm mt-2 leading-relaxed">
+                                    ${getNeText(documentData.bodyParagraphs[0].neUnicode)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Reconstructed High-Fidelity Data Table -->
+                        <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/90 shadow-xl">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-indigo-950/60 border-b border-slate-800 text-indigo-200">
+                                        ${documentData.table.headers.map(h => `<th class="px-4 py-3 font-semibold ${neFontClass}">${getNeText(h)}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 text-slate-300">
+                                    ${documentData.table.rows.map(row => `
+                                        <tr class="hover:bg-slate-800/40 transition">
+                                            <td class="px-4 py-3 font-mono font-bold text-indigo-400">${getNeText(row[0])}</td>
+                                            <td class="px-4 py-3 font-medium output-times text-slate-100">${getNeText(row[1])}</td>
+                                            <td class="px-4 py-3 ${neFontClass}">${getNeText(row[2])}</td>
+                                            <td class="px-4 py-3 font-mono text-emerald-300 font-semibold">${getNeText(row[3])}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Secondary Multilingual Note -->
+                        <div class="p-3 bg-amber-950/20 border border-amber-500/20 rounded-xl flex items-center space-x-3 text-xs text-amber-200/90">
+                            <i class="fa-solid fa-circle-info text-amber-400 text-base"></i>
+                            <div>
+                                <span class="font-semibold">Nepal Bhaasa & Hindi Addendum:</span> 
+                                <span class="${neFontClass} ml-1">${getNeText(documentData.bodyParagraphs[0].newUnicode)}</span> | 
+                                <span class="output-unicode ml-1">${documentData.bodyParagraphs[0].hiUnicode}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = richHtml;
+            }
+
+            // Update word count
+            updateWordCount();
+        }
+
+        // Word count calculator
+        function updateWordCount() {
+            const container = document.getElementById('outputContentContainer');
+            const text = container.innerText || "";
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+            document.getElementById('wordCountBadge').textContent = words;
+        }
+
+        // OCR Scan Simulation (Simulates deep multilingual recognition)
+        function runOCRSimulation() {
+            const hud = document.getElementById('processingHud');
+            const scanLine = document.getElementById('scannerLine');
+            hud.classList.remove('hidden');
+            scanLine.classList.remove('hidden');
+
+            const steps = [
+                "Allocating 5 GB Buffer Pipeline...",
+                "Running Devanagari & Latin Neural Tokenizer...",
+                "Mapping Nepal Bhaasa (Newar) Glyphs...",
+                "Applying Times New Roman & Preeti Font Encodings..."
+            ];
+
+            let stepIdx = 0;
+            const interval = setInterval(() => {
+                if (stepIdx < steps.length) {
+                    document.getElementById('hudStatus').textContent = steps[stepIdx];
+                    stepIdx++;
+                }
+            }, 300);
+
+            setTimeout(() => {
+                clearInterval(interval);
+                hud.classList.add('hidden');
+                scanLine.classList.add('hidden');
+                renderExtractedOutput();
+                showToast("Text Extracted Successfully!", "check");
+            }, 1400);
+        }
+
+        // File Drag & Drop Handling with 5GB Check
+        function handleDragOver(e) {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.add('border-indigo-500', 'bg-slate-900/80');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.remove('border-indigo-500', 'bg-slate-900/80');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.remove('border-indigo-500', 'bg-slate-900/80');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                processFiles(e.dataTransfer.files);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                processFiles(e.target.files);
+            }
+        }
+
+        function processFiles(files) {
+            let addedBytes = 0;
+            for (let i = 0; i < files.length; i++) {
+                addedBytes += files[i].size;
+            }
+
+            if (totalBufferUsedBytes + addedBytes > MAX_BUFFER_BYTES) {
+                showToast("Exceeds 5.0 GB maximum buffer quota limit!", "error");
+                return;
+            }
+
+            totalBufferUsedBytes += addedBytes;
+            updateBufferUI();
+
+            const file = files[0];
+            const reader = new FileReader();
+
+            document.getElementById('fileBadge').textContent = `${file.name.substring(0, 18)}... (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+
+            if (file.type.startsWith('image/')) {
+                reader.onload = (event) => {
+                    document.getElementById('imagePreview').src = event.target.result;
+                    runOCRSimulation();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                runOCRSimulation();
+            }
+        }
+
+        function triggerSampleScan() {
+            document.getElementById('imagePreview').src = "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1000&q=80";
+            document.getElementById('fileBadge').textContent = "Demo Image Loaded";
+            runOCRSimulation();
+        }
+
+        // Language Management Modal Functions
+        function openLanguageModal() {
+            document.getElementById('langModal').classList.remove('hidden');
+        }
+
+        function closeLanguageModal() {
+            document.getElementById('langModal').classList.add('hidden');
+            document.getElementById('newLangName').value = '';
+            document.getElementById('newLangCode').value = '';
+        }
+
+        function addNewLanguage() {
+            const name = document.getElementById('newLangName').value.trim();
+            const code = document.getElementById('newLangCode').value.trim() || name.toLowerCase().slice(0, 3);
+
+            if (!name) {
+                showToast("Please enter a valid language name", "error");
+                return;
+            }
+
+            const select = document.getElementById('languageSelect');
+            const newOption = document.createElement('option');
+            newOption.value = code;
+            newOption.textContent = `${name} (${code.toUpperCase()}) - Custom`;
+            newOption.selected = true;
+            select.appendChild(newOption);
+
+            closeLanguageModal();
+            handleLanguageChange();
+            showToast(`Language pack "${name}" successfully registered!`, "check");
+        }
+
+        // Copy and Export functions
+        function copyToClipboard() {
+            const container = document.getElementById('outputContentContainer');
+            const textToCopy = container.innerText || container.textContent;
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const btnText = document.getElementById('copyBtnText');
+                btnText.textContent = "Copied!";
+                showToast("Extracted text copied to clipboard!", "check");
+                setTimeout(() => {
+                    btnText.textContent = "Copy";
+                }, 2000);
+            }).catch(err => {
+                showToast("Could not access clipboard", "error");
+            });
+        }
+
+        function downloadExport(type) {
+            const container = document.getElementById('outputContentContainer');
+            const text = container.innerText;
+            let filename = `extracted_ocr_${currentFormat}_${Date.now()}`;
+            let blob, mimeType;
+
+            if (type === 'txt') {
+                mimeType = 'text/plain;charset=utf-8';
+                blob = new Blob([text], { type: mimeType });
+                filename += '.txt';
+            } else if (type === 'doc') {
+                mimeType = 'application/msword;charset=utf-8';
+                const docHtml = `<html><head><meta charset="utf-8"></head><body style="font-family:'Times New Roman', Preeti, sans-serif;">${container.innerHTML}</body></html>`;
+                blob = new Blob([docHtml], { type: mimeType });
+                filename += '.doc';
+            } else if (type === 'json') {
+                mimeType = 'application/json;charset=utf-8';
+                const jsonPayload = JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    formatMode: currentFormat,
+                    nepaliFont: currentNepaliEncoding,
+                    englishFont: "Times New Roman",
+                    confidence: 0.994,
+                    data: text
+                }, null, 2);
+                blob = new Blob([jsonPayload], { type: mimeType });
+                filename += '.json';
+            }
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast(`Exported document as ${filename}`, "check");
+        }
+
+        function clearText() {
+            document.getElementById('outputContentContainer').innerHTML = `
+                <div class="text-center py-16 text-slate-500">
+                    <i class="fa-regular fa-file text-4xl mb-3 opacity-40"></i>
+                    <p class="text-sm">Output workspace is empty.</p>
+                    <p class="text-xs mt-1">Upload a document or click "Re-run OCR Extraction" to restore.</p>
+                </div>
+            `;
+            document.getElementById('wordCountBadge').textContent = '0';
+        }
+
+        // Notification Toast
+        function showToast(message, type = 'check') {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toastMsg');
+            const icon = document.getElementById('toastIcon');
+
+            msg.textContent = message;
+            if (type === 'error') {
+                icon.className = "fa-solid fa-circle-exclamation text-rose-400";
+            } else if (type === 'info') {
+                icon.className = "fa-solid fa-circle-info text-indigo-400";
+            } else {
+                icon.className = "fa-solid fa-circle-check text-emerald-400";
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function escapeHtml(string) {
+            return String(string).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
